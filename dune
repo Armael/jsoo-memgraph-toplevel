@@ -1,0 +1,100 @@
+(executables
+ (names toplevel)
+ (libraries
+  js_of_ocaml-compiler
+  js_of_ocaml-tyxml
+  js_of_ocaml-toplevel
+  lwt
+  js_of_ocaml-lwt
+  compiler-libs.bytecomp
+  compiler-libs.toplevel
+  ;; not used directly
+  memgraph
+  graphics
+  js_of_ocaml.deriving
+  react
+  reactiveData
+  str
+  dynlink
+  ocp-indent.lib
+  higlo
+  js_of_ocaml-lwt.graphics
+  js_of_ocaml-ppx)
+ (flags
+  (:standard -rectypes))
+ (link_flags
+  (:standard -linkall))
+ (modes byte js)
+ (js_of_ocaml
+  (link_flags (:standard))
+  (build_runtime_flags
+   (:standard
+    +toplevel.js
+    --file
+    %{dep:examples.ml}))
+  (flags
+   (:standard
+    --toplevel)))
+ (modules
+  (:standard \ examples))
+ (preprocess
+  (pps js_of_ocaml-ppx)))
+
+
+(rule
+ (targets export.txt)
+ (deps
+  (package js_of_ocaml-ppx)
+  (package js_of_ocaml)
+  (package js_of_ocaml-compiler)
+  (package js_of_ocaml-lwt)
+  (package js_of_ocaml-tyxml)
+  (package js_of_ocaml-toplevel))
+ (action
+  (run
+   jsoo_listunits
+   -o
+   %{targets}
+   stdlib
+   memgraph
+   graphics
+   str
+   dynlink
+   js_of_ocaml-compiler.runtime
+   js_of_ocaml-lwt.graphics
+   js_of_ocaml-ppx.as-lib
+   js_of_ocaml.deriving
+   lwt
+   tyxml.functor
+   tyxml.functor:html_types.cmi
+   react
+   reactiveData
+   js_of_ocaml
+   js_of_ocaml-lwt
+   js_of_ocaml-tyxml
+   js_of_ocaml-toplevel)))
+
+(rule
+ (targets toplevel.js)
+ (action
+  (run
+   %{bin:js_of_ocaml}
+   compile
+   --pretty
+;;   --Werror
+   --target-env
+   browser
+   --file
+   %{dep:examples.ml}
+   --export
+   %{dep:export.txt}
+   --toplevel
+   --disable
+   shortvar
+   %{dep:toplevel.bc}
+   -o
+   %{targets})))
+
+(alias
+ (name default)
+ (deps toplevel.js toplevel.bc.js index.html viz.js))
