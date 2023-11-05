@@ -4,6 +4,9 @@ all:
 release:
 	dune build --profile=release
 
+clean:
+	dune clean
+
 pages: release
 	git checkout gh-pages && rm -rf docs && \
     mkdir docs && \

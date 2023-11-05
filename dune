@@ -34,6 +34,7 @@
     %{dep:examples.ml}))
   (flags
    (:standard
+    --opt=2
     --toplevel)))
  (modules
   (:standard \ examples))
@@ -80,7 +81,7 @@
   (run
    %{bin:js_of_ocaml}
    compile
-   --pretty
+   --opt=2
 ;;   --Werror
    --target-env
    browser
@@ -97,4 +98,4 @@
 
 (alias
  (name default)
- (deps toplevel.js toplevel.bc.js index.html viz.js))
+ (deps toplevel.js index.html viz.js))
