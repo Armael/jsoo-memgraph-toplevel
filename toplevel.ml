@@ -374,7 +374,7 @@ let memgraph_of_bindings (bindings: (string * Obj.t) list) =
   let fmt = Format.formatter_of_buffer b in
   let reprs =
     Memgraph.Repr.context (fun ctx ->
-      List.map (fun (name, obj) -> (name, ctx.mk obj)) bindings
+      List.rev_map (fun (name, obj) -> (name, ctx.mk obj)) bindings
     ) in
   let conf =
     Memgraph.Dot.config
