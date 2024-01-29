@@ -111,8 +111,17 @@ module Version = struct
         | n -> n)
 end
 
+let show_lambda : (string -> unit) ref = ref (fun _ -> ())
+
+let setup_js_preview () =
+  let ph = by_id "last-js" in
+  show_lambda := fun s ->
+    ph##.innerHTML := Js.string s
+
 let setup_toplevel () =
   Clflags.debug := true;
+  Clflags.dump_lambda := false;
+  Clflags.locations := false;
   JsooTop.initialize ();
   Sys.interactive := false;
   if Version.compare Version.current [ 4; 07 ] >= 0 then exec' "open Stdlib";
@@ -136,6 +145,8 @@ let setup_toplevel () =
   (by_id "toploop-env-svg")##.innerHTML :=
     Js.string "<p>...Nothing at the moment, try defining some values! (Names starting with <code>_</code> are ignored.)</p>"
   ;
+  !show_lambda "";
+  Clflags.dump_lambda := true;
   ()
 
 let resize ~container ~textbox () =
@@ -148,12 +159,16 @@ let resize ~container ~textbox () =
   Lwt.return ()
 
 let setup_printers () =
+  let dlambda = !Clflags.dump_lambda in
+  Clflags.dump_lambda := false;
   exec'
     "let _print_error fmt e = Format.pp_print_string fmt (Js_of_ocaml.Js_error.to_string \
      e)";
   Topdirs.dir_install_printer Format.std_formatter Longident.(Lident "_print_error");
   exec' "let _print_unit fmt (_ : 'a) : 'a = Format.pp_print_string fmt \"()\"";
-  Topdirs.dir_install_printer Format.std_formatter Longident.(Lident "_print_unit")
+  Topdirs.dir_install_printer Format.std_formatter Longident.(Lident "_print_unit");
+  Clflags.dump_lambda := dlambda
+
 
 let setup_examples ~container:_ ~textbox:_ =
   ()
@@ -275,14 +290,6 @@ let setup_share_button ~output =
                     append_url uri;
                     Lwt.return_unit));
             Js._false))
-
-let setup_js_preview () =
-  let ph = by_id "last-js" in
-  let runcode : string -> 'a = Js.Unsafe.global##.toplevelEval in
-  Js.Unsafe.global##.toplevelEval
-  := fun bc ->
-  ph##.innerHTML := Js.string bc;
-  runcode bc
 
 let current_position = ref 0
 
@@ -423,6 +430,12 @@ let run _ =
   (* let env_container = by_id "toploop-env" in *)
   let memgraph_container = by_id "toploop-env-svg" in
   let bindings_tbl : Obj.t Ident.tbl ref = ref Ident.empty in
+  (* [is_lambda_output] is part of a hack to identify the -dlambda part of the
+     output from the rest: we know that the toplevel first prints the -dlambda
+     output then flushes the output. We use this reference in a callback
+     instrumenting flushes to know whether we're before this flush or after.
+     (The reference is reset to true at each toplevel phrase.) *)
+  let is_lambda_output = ref true in
   let rec update_tbl = function
     | [] -> ()
     | id :: ids ->
@@ -446,6 +459,8 @@ let run _ =
     current_position := output##.childNodes##.length;
     textbox##.value := Js.string "";
     History.push content;
+    Format.pp_print_flush caml_ppf ();
+    is_lambda_output := true;
     JsooTop.execute true ~pp_code:sharp_ppf ~highlight_location caml_ppf content';
     let toplevel_idents = toplevel_idents () in
     update_tbl toplevel_idents;
@@ -538,7 +553,15 @@ let run _ =
       textbox##focus;
       Lwt.return_unit);
   (* Graphics_support.init (by_id_coerce "test-canvas" Dom_html.CoerceTo.canvas); *)
-  Sys_js.set_channel_flusher caml_chan (append Colorize.ocaml output "caml");
+  let caml_chan_flush str =
+    if !is_lambda_output then (
+      !show_lambda str;
+      is_lambda_output := false
+    ) else (
+      append Colorize.ocaml output "caml" str
+    )
+  in
+  Sys_js.set_channel_flusher caml_chan caml_chan_flush;
   Sys_js.set_channel_flusher sharp_chan (append Colorize.ocaml output "sharp");
   Sys_js.set_channel_flusher stdout (append Colorize.text output "stdout");
   Sys_js.set_channel_flusher stderr (append Colorize.text output "stderr");
@@ -552,8 +575,8 @@ let run _ =
   setup_share_button ~output;
   setup_examples ~container ~textbox;
   setup_pseudo_fs ~load_cmis_from_server:false;
-  setup_toplevel ();
   setup_js_preview ();
+  setup_toplevel ();
   setup_printers ();
   History.setup ();
   textbox##.value := Js.string "";
